@@ -16,27 +16,6 @@ from sklearn.metrics import calinski_harabasz_score
 from sklearn.decomposition import PCA
 
 
-
-def divide_numbers(a, b):
-    """
-    Divide two numbers.
- 
-    Parameters
-    ----------
-    a : float
-        The dividend.
-    b : float
-        The divisor.
- 
-    Returns
-    -------
-    float
-        The quotient of the division.
-    """
-    if b == 0:
-        raise ValueError("Division by zero is not allowed.")
-    return a / b
-
 class PltIdn(object):
     def __init__(self):
         pass
@@ -61,14 +40,14 @@ class PltIdn(object):
             data = np.array(data, dtype='float')
         return data
     
-    def center_mass_map(self, ind_array):
+    def center_mass_map(self, _ind_array):
         """
         Функция вычисления карты центра масс для набора векторов (Cx, Cy).
         Применяется для разделения частиц по производной характеристике трейсов светорассеяния путем кластеризации. 
 
         Parameters
         ----------
-        ind_array : numpy.ndarray
+        _ind_array : numpy.ndarray
             2D массив, набор векторов для которых производится вычисление центра масс
 
         Returns
@@ -76,12 +55,12 @@ class PltIdn(object):
         cm_map : numpy.ndarray
             Numpy 2D массив (карта) центров масс Cx, Cy
         """
-        N, M = np.shape(ind_array)
+        N, M = np.shape(_ind_array)
         time = np.array(range(M))
         cm_map = np.zeros((N, 2))
         for i in range(N):
-            cm_map[i, 0] = np.sum(time * ind_array[i,:]) / np.sum(ind_array[i,:])
-            cm_map[i, 1] = np.sum(time * ind_array[i,:]) / np.sum(time)
+            cm_map[i, 0] = np.sum(time * _ind_array[i,:]) / np.sum(_ind_array[i,:])
+            cm_map[i, 1] = np.sum(time * _ind_array[i,:]) / np.sum(time)
         return cm_map
     
     def quantile_filter(self, features, indexes, quantile = 0.99):
@@ -122,9 +101,9 @@ class PltIdn(object):
         Parameters
         ----------
         forward_array : numpy.ndarray
-            2D массив, набор векторов прямых трейсов для которых производится вычисление интеграла
+            2D массив, набор векторов  трейсов прямой индикатрисы для которых производится вычисление интеграла
         backward_array : numpy.ndarray
-            2D массив, набор векторов обратных трейсов для которых производится вычисление интеграла
+            2D массив, набор векторов трейсов обратной индикатрисы для которых производится вычисление интеграла
 
         Returns
         -------
@@ -138,7 +117,7 @@ class PltIdn(object):
             int_map[i,1] = np.sum(backward_array[i])
         return int_map
     
-    def zero_delection(self, ind_array):
+    def zero_delection(self, _ind_array):
         """
         Функция удаления постоянной состоявляющей у векторов трейсов светорассеяния. Удаление происходит производится следующим образом:
         1. Определяется медиана вектора трейса
@@ -156,28 +135,28 @@ class PltIdn(object):
             2D массив, набор векторов трейсов c удаленной постоянной составляющей
         """
         N, M = np.shape(ind_array)
-        _ind_array = np.copy(ind_array)
+        _ind_array_copy = np.copy(_ind_array)
 
         for i in range(N):
-            _base = _ind_array[i]
+            _base = _ind_array_copy[i]
             _base = _base[_base < np.median(_base)]
-            _ind_array[i] = _ind_array[i] - np.mean(_base)
-        return _ind_array
+            _ind_array_copy[i] = _ind_array_copy[i] - np.mean(_base)
+        return _ind_array_copy
     
-    def dim_reduction(self, ind_array, win_size = 10):
+    def dim_reduction(self, _ind_array, win_size = 10):
         """
         Функция децимации входных векторов
 
         Parameters
         ----------
-        ind_array : numpy.ndarray
+        _ind_array : numpy.ndarray
             2D массив, набор векторов трейсов для которых производится децимация
         
         Returns
         -------
         numpy.ndarray 2D массив, набор векторов децимированных трейсов 
         """
-        return decimate(ind_array, win_size, axis = 1)
+        return decimate(_ind_array, win_size, axis = 1)
         
     def auto_clustering_filter(self, forward_array, backward_array, indexes = None):
         """
@@ -195,179 +174,135 @@ class PltIdn(object):
         Parameters
         ----------
         forward_array : numpy.ndarray
-            2D массив, набор векторов прямых трейсов для которых производится вычисление интеграла
+            2D массив, набор векторов трейсов прямой индикатрисы 
         backward_array : numpy.ndarray
-            2D массив, набор векторов обратных трейсов для которых производится вычисление интеграла
+            2D массив, набор векторов трейсов обратной индикатрисы
         indexes : numpy.ndarray
             1D массив, индексы набора векторов
 
         Returns
         -------
-
+        _forward_array : numpy.ndarray 
+            2D массив, набор векторов трейсов прямой индикатрисы, отфильтрованный квантильным методом 
+        _backward_array : numpy.ndarray 
+            2D массив, набор векторов трейсов обратной индикатрисы, отфильтрованный квантильным методом 
+        _indexes : numpy.ndarray 
+            1D массив, индексы набора векторов, отфильтрованный квантильным методом 
+        _labels : numpy.ndarray 
+            1D массив, метки кластеров для векторов прямой индикатрисы   
         """
-
+        
+        BOUNDS = [(0.001, 0.07), (10, 50)]
         _indexes = np.array(range(len(forward_array)))
 
         cm = self.center_mass_map(forward_array)
         Scaler = MinMaxScaler()
         cm = Scaler.fit_transform(cm)
-        cm, _indexes = self.quantile_filter(cm, _indexes,0.99)
+        cm, _indexes = self.quantile_filter(cm, _indexes,0.999)
 
         def min_func(args): 
-            clustering = DBSCAN(eps=args[0], min_samples=int(args[1])).fit_predict(cm)
-            if len(np.unique(clustering)) == 1:
+            labels = DBSCAN(eps=args[0], min_samples=int(args[1])).fit_predict(cm)
+            if len(np.unique(labels)) == 1:
                 return 1
-            return 1 - calinski_harabasz_score(cm, clustering)
+            return 1 - calinski_harabasz_score(cm, labels)
 
-        BOUNDS = [(0.001, 0.07), (10, 50)]
+        
         result = direct(min_func, BOUNDS, maxfun = 400)
 
-        clustering = DBSCAN(eps=result.x[0], min_samples=int(result.x[1])).fit_predict(cm)
+        labels = DBSCAN(eps=result.x[0], min_samples=int(result.x[1])).fit_predict(cm)
         
         plt.title('Результат кластеризации по центру масс')
         plt.xlabel('CMX')
         plt.ylabel('CMY')
         
-        for i in np.unique(clustering):
-            _cm = cm[clustering == i]
+        for i in np.unique(labels):
+            _cm = cm[labels == i]
             plt.plot(_cm[:,0],_cm[:,1], '.',label = 'Кластер№' + str(i),)
         
         plt.legend()
         plt.show()
         
-        for i in np.unique(clustering):
+        for i in np.unique(labels):
             plt.figure(figsize=(10,5))
             plt.subplot(121)
             plt.title('Трейсы прямой индикатрисы кластера№'+ str(i))
-            plt.plot(forward_array[_indexes[clustering == i]].T)
+            plt.plot(forward_array[_indexes[labels == i]].T)
             plt.subplot(122)
             plt.title('Трейсы обратной  индикатрисы кластера№'+ str(i))
-            plt.plot(backward_array[_indexes[clustering == i]].T)
+            plt.plot(backward_array[_indexes[labels == i]].T)
             plt.show()
             
-        choise = int(input('Какой выбрать кластер?'))
-        _indexes = _indexes[clustering == choise]
-        
-        print('Количество выбранных частиц:' + str(len(_indexes)))
-        if type(indexes) != None:
-            return forward_array[_indexes], backward_array[_indexes], indexes[_indexes]
-        else:
-            return forward_array[_indexes], backward_array[_indexes], _indexes
-    
-    def dimer_idn(self, forward_array, backward_array, indexes = None):
-        """
 
+        if type(indexes) != None:
+            return forward_array[_indexes], backward_array[_indexes], indexes[_indexes], labels
+        else:
+            return forward_array[_indexes], backward_array[_indexes], _indexes, labels
+    
+    def dimer_idn(self, forward_array, backward_array):
+        """
+        Функция-алгоритм разделения частиц на классы отдельный тромбоцит \ агрегат по трейсам светорассеяния прямой и обратной индикатрис.
+        Разделение происходит следующим образом:
+        1. Производится нормировка векторов передней и задней индикатрисы на интеграл передней индикатрисы. Нормировка происходит для каждой индикатрисы индивидуально
+        2. Строится матрица расстояний между частицами. Матрица расстояний определяется как отношение метрик L2 задней и передней интикатрисы.
+        3. По известной матрице расстояний производится агломеративная кластеризация на 2 кластера.
+        4. После кластеризации производится вычисление среднего значение интеграла отнормированной задней индикатрисы для каждого из выдленных кластеров.
+        Тот кластер, чей средний интеграл больше - определяется как как кластер агрегатов.
+
+        Parameters
+        ----------
+        forward_array : numpy.ndarray
+            2D массив, набор векторов трейсов прямой индикатрисы 
+        backward_array : numpy.ndarray
+            2D массив, набор векторов трейсов обратной индикатрисы
+
+        Returns
+        -------
+        labels : 1D массив, метки частиц, 0 соответсвует мономеру тромбоцитов, 1 соотсветствует агрегату
         """
 
         _indexes = np.array(range(len(forward_array)))
 
         def dimer_norm(_forward_array, _backward_array):
             return distance_matrix(_backward_array, _backward_array) / (distance_matrix(_forward_array, _forward_array) + 0.00000000001)
-        
+
+        forward_array = forward_array / np.reshape(np.sum(forward_array, axis = 1), (-1,1))
+        backward_array = backward_array / np.reshape(np.sum(forward_array, axis = 1), (-1,1))
+
         _norm = dimer_norm(forward_array, backward_array)
-        clustering = AgglomerativeClustering(affinity="precomputed", linkage='complete', n_clusters=2).fit_predict(_norm)
+        
+        _labels = AgglomerativeClustering(affinity="precomputed", linkage='complete', n_clusters=2).fit_predict(_norm)
 
         plt.figure(figsize=(10,5))
         plt.subplot(121)
         plt.title('Трейсы прямой индикатрисы кластера№0')
-        plt.plot(forward_array[_indexes[clustering == 0]].T)
+        plt.plot(forward_array[_indexes[_labels == 0]].T)
         plt.subplot(122)
         plt.title('Трейсы обратной индикатрисы кластера№0')
-        plt.plot(backward_array[_indexes[clustering == 0]].T)
+        plt.plot(backward_array[_indexes[_labels == 0]].T)
         plt.show()
         
         plt.figure(figsize=(10,5))
         plt.subplot(121)
         plt.title('Трейсы прямой индикатрисы кластера№1')
-        plt.plot(forward_array[_indexes[clustering == 1]].T)
+        plt.plot(forward_array[_indexes[_labels == 1]].T)
         plt.subplot(122)
         plt.title('Трейсы обратной индикатрисы кластера№1')
-        plt.plot(backward_array[_indexes[clustering == 1]].T)
+        plt.plot(backward_array[_indexes[_labels == 1]].T)
         plt.show()
 
-        print('Размер кластера№0: ' + str(len(backward_array[_indexes[clustering == 0]])))
-        print('Размер кластера№1: ' + str(len(backward_array[_indexes[clustering == 1]])))
+        print('Размер кластера№0: ' + str(len(backward_array[_indexes[_labels == 0]])))
+        print('Размер кластера№1: ' + str(len(backward_array[_indexes[_labels == 1]])))
 
-    def dimer_multifactor_idn(self, forward_array, backward_array, indexes = None):
+        labels = np.copy(_labels)
 
-        _indexes = np.array(range(len(forward_array)))
-        
-        int_map = self.integral_map(forward_array, backward_array)
-        cmf_map = self.center_mass_map(forward_array)
-        cmb_map = self.center_mass_map(backward_array)
+        if np.mean(backward_array[_indexes[_labels == 1]]) < np.mean(backward_array[_indexes[_labels == 0]]):
+            labels[_labels == 0] = 1
+            labels[_labels == 1] = 0
+        return labels
+    
+    def draw_cluster_map(self, cm, labels):
+        pass
 
-        multifactor_map = np.hstack([int_map, cmf_map, cmb_map])
-
-        pca = PCA()
-        multifactor_map = pca.fit_transform(multifactor_map)
-
-        Scaler = MinMaxScaler()
-        multifactor_map = Scaler.fit_transform(multifactor_map)
-        multifactor_map, _indexes = self.quantile_filter(multifactor_map, _indexes,0.99)
-        multifactor_map = Scaler.fit_transform(multifactor_map)
-        multifactor_map = multifactor_map[:,:2]
-        
-        def min_func(args): 
-            clustering = DBSCAN(eps=args[0], min_samples=int(args[1])).fit_predict(multifactor_map)
-            if len(np.unique(clustering)) == 1:
-                return 1
-            return 1 - calinski_harabasz_score(multifactor_map, clustering)
-
-        BOUNDS = [(0.001, 0.07), (10, 50)]
-        result = direct(min_func, BOUNDS, maxfun = 400)
-
-        clustering = DBSCAN(eps=result.x[0], min_samples=int(result.x[1])).fit_predict(multifactor_map)
-        
-
-        plt.title('Результат кластеризации по центру масс')
-        plt.xlabel('CMX')
-        plt.ylabel('CMY')
-        
-        for i in np.unique(clustering):
-            _multifactor_map = multifactor_map[clustering == i]
-            plt.plot(_multifactor_map[:,0],_multifactor_map[:,1], '.',label = 'Кластер№' + str(i),)
-        
-        plt.legend()
-        plt.show()
-
-        for i in np.unique(clustering):
-            plt.figure(figsize=(10,5))
-            plt.subplot(121)
-            plt.title('Трейсы прямой индикатрисы кластера№'+ str(i))
-            plt.plot(forward_array[_indexes[clustering == i]].T)
-            plt.subplot(122)
-            plt.title('Трейсы обратной  индикатрисы кластера№'+ str(i))
-            plt.plot(backward_array[_indexes[clustering == i]].T)
-            plt.show()
-            
-        choise = int(input('Какой выбрать кластер?'))
-        _indexes = _indexes[clustering == choise]
-        
-        print('Количество выбранных частиц:' + str(len(_indexes)))
-        if type(indexes) != None:
-            return forward_array[_indexes], backward_array[_indexes], indexes[_indexes]
-        else:
-            return forward_array[_indexes], backward_array[_indexes], _indexes
-
-
-
-        # plt.figure(figsize=(10,5))
-        # plt.subplot(121)
-        # plt.title('Трейсы прямой индикатрисы кластера№0')
-        # plt.plot(forward_array[_indexes[clustering == 0]].T)
-        # plt.subplot(122)
-        # plt.title('Трейсы обратной индикатрисы кластера№0')
-        # plt.plot(backward_array[_indexes[clustering == 0]].T)
-        # plt.show()
-        
-        # plt.figure(figsize=(10,5))
-        # plt.subplot(121)
-        # plt.title('Трейсы прямой индикатрисы кластера№1')
-        # plt.plot(forward_array[_indexes[clustering == 1]].T)
-        # plt.subplot(122)
-        # plt.title('Трейсы обратной индикатрисы кластера№1')
-        # plt.plot(backward_array[_indexes[clustering == 1]].T)
-        # plt.show()
-
-        # print('Размер кластера№0: ' + str(len(backward_array[_indexes[clustering == 0]])))
-        # print('Размер кластера№1: ' + str(len(backward_array[_indexes[clustering == 1]])))
+    def draw_platelet_ind(self):
+        pass
+    
