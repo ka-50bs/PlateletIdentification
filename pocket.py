@@ -82,42 +82,78 @@ class Purifier():
 
         Returns
         -------
-        _features : numpy.ndarray
+        temp_features : numpy.ndarray
             Numpy 2D массив отфильтрованного набора векторов
-        __indexes : numpy.ndarray
+        temp_indexes : numpy.ndarray
             Numpy 1D массив индексов отфильтрованного набора
         """
         edges_down = np.quantile(_features, (1 - _quantile) / 2 , axis=0)
         edges_up = np.quantile(_features, 1 - (1 - _quantile) / 2, axis=0)
-        __indexes = _indexes
-        _features = _features
+        temp_indexes = _indexes
+        temp_features = _features
         for i in range(len(edges_down)):
-            __indexes = __indexes[_features[:,i] > edges_down[i]]
-            _features = _features[_features[:,i] > edges_down[i]]
-            __indexes = __indexes[_features[:,i] < edges_up[i]]
-            _features = _features[_features[:,i] < edges_up[i]]
-        return _features, __indexes
+            temp_indexes = temp_indexes[temp_features[:,i] > edges_down[i]]
+            temp_features = temp_features[temp_features[:,i] > edges_down[i]]
+            temp_indexes = temp_indexes[temp_features[:,i] < edges_up[i]]
+            temp_features = temp_features[temp_features[:,i] < edges_up[i]]
+        return temp_features, temp_indexes
         
         pass
 
 class Drawer():
-    def drawMap(self):
+    def drawMap(self, _map):
+        plt.plot(_map[:,0], _map[:,1], '.')
+        plt.show()
         pass
 
-    def drawGating(self):
+    def drawGating(self, _map, _map_names, _labels):
+
+        plt.title('Результат кластеризации')
+        plt.xlabel(_map_names[0])
+        plt.ylabel(_map_names[1])
+
+        for i in np.unique(_labels):
+            _sub_map = _map[_labels == i]
+            plt.plot(_sub_map[:,0], _sub_map[:,1], '.', label = "Кластер №" + str(i))
+
+        plt.legend()
+        plt.show()
         pass
     
-    def drawIdentification(self):
-        pass
+    def drawIdnTraces(self, _labels, _forward_array, _backward_array):
+        
+        for i in np.unique(_labels):
+            plt.figure(figsize=(10,5))
+            plt.subplot(121)
+            plt.title('Трейсы прямой индикатрисы кластера№' + str(i))
+            plt.plot(_forward_array[_labels == i].T)
+            plt.subplot(122)
+            plt.title('Трейсы обратной индикатрисы кластера№' +  + str(i))
+            plt.plot(_backward_array[_indexes_labels == i].T)
+            plt.show()
+            pass
 		
 class PltIdentifier():
-    def identifyByMetric(self):
+    def identifyByMetric(self, _forward_array, _backward_array):
+
+        forward_array = _forward_array / np.reshape(np.sum(_forward_array, axis = 1), (-1,1))
+        backward_array = _backward_array / np.reshape(np.sum(_forward_array, axis = 1), (-1,1))
+
+        _norm = self.__metric(forward_array, backward_array)
+        _labels = AgglomerativeClustering(affinity="precomputed", linkage='complete', n_clusters=2).fit_predict(_norm)
+        labels = np.copy(_labels)
+
+        if np.mean(backward_array[_labels == 1]) < np.mean(backward_array[_labels == 0]):
+            labels[_labels == 0] = 1
+            labels[_labels == 1] = 0
+        return labels
         pass
 
-    def identifyByMap(self):
+    def identifyByMap(self, _forward_array, _backward_array):
         pass
 
-    def __metric(self):
+    def __metric(self, _forward_array, _backward_array):
+        return distance_matrix(_backward_array, _backward_array) / (distance_matrix(_forward_array, _forward_array) + 0.0000000000001)
         pass
 
 class AutoGater():
